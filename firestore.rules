@@ -1,0 +1,794 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBoundedUidList(uids) {
+      return uids is list
+        && uids.size() >= 1
+        && uids.size() <= 20
+        && uids[0] is string
+        && isValidId(uids[0]);
+    }
+
+    function isHomeOwner(homeId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/homes/$(homeId))
+        && get(/databases/$(database)/documents/homes/$(homeId)).data.ownerId == request.auth.uid;
+    }
+
+    function isHomeMember(homeId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function isHomeAdmin(homeId) {
+      return isHomeOwner(homeId)
+        || (isHomeMember(homeId)
+          && get(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid)).data.canManageFamily == true);
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidUserHouseholdLink(data, userId) {
+      return data.keys().hasAll(['uid', 'homeId', 'role', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'homeId', 'role', 'updatedAt'])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && isValidId(data.uid)
+        && data.homeId is string
+        && isValidId(data.homeId)
+        && data.role is string
+        && data.role.size() <= 20
+        && data.role in ['owner', 'adult', 'guest']
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidHomeState(data, userId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'selectedMode',
+          'lightOn',
+          'fanOn',
+          'fanSpeed',
+          'doorLocked',
+          'doorOpen',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'selectedMode',
+          'lightOn',
+          'fanOn',
+          'fanSpeed',
+          'doorLocked',
+          'doorOpen',
+          'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == userId
+        && data.ownerId == request.auth.uid
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.selectedMode is string
+        && data.selectedMode.size() <= 20
+        && data.selectedMode in ['Home', 'Away', 'Sleep', 'Morning']
+        && data.lightOn is bool
+        && data.fanOn is bool
+        && data.fanSpeed is int
+        && data.fanSpeed >= 1
+        && data.fanSpeed <= 5
+        && data.doorLocked is bool
+        && data.doorOpen is bool
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidActivity(data, userId) {
+      return data.keys().hasAll(['ownerId', 'title', 'icon', 'createdAt'])
+        && data.keys().hasOnly(['ownerId', 'title', 'icon', 'createdAt'])
+        && data.ownerId is string
+        && data.ownerId == userId
+        && data.ownerId == request.auth.uid
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 160
+        && data.icon is string
+        && data.icon.size() <= 20
+        && data.icon in ['light', 'fan', 'door', 'mode', 'voice']
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    function isValidAutomationRoutine(data, userId, routineId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'routineId',
+          'lightAction',
+          'fanAction',
+          'fanSpeed',
+          'doorAction',
+          'requireSafetyConfirmation',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'routineId',
+          'lightAction',
+          'fanAction',
+          'fanSpeed',
+          'doorAction',
+          'requireSafetyConfirmation',
+          'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == userId
+        && data.ownerId == request.auth.uid
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.routineId is string
+        && data.routineId == routineId
+        && data.routineId.size() <= 20
+        && data.routineId in ['sleep', 'morning', 'away']
+        && data.lightAction is string
+        && data.lightAction.size() <= 20
+        && data.lightAction in ['turn_on', 'turn_off', 'unchanged']
+        && data.fanAction is string
+        && data.fanAction.size() <= 20
+        && data.fanAction in ['turn_on', 'turn_off', 'unchanged']
+        && data.fanSpeed is int
+        && data.fanSpeed >= 1
+        && data.fanSpeed <= 5
+        && data.doorAction is string
+        && data.doorAction.size() <= 32
+        && data.doorAction in ['lock_with_safety_check', 'keep_locked', 'unchanged']
+        && data.requireSafetyConfirmation is bool
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidHousehold(data, homeId) {
+      return data.keys().hasAll([
+          'homeId',
+          'name',
+          'ownerId',
+          'memberUids',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'homeId',
+          'name',
+          'ownerId',
+          'memberUids',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.homeId is string
+        && data.homeId == homeId
+        && isValidId(data.homeId)
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 80
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && isBoundedUidList(data.memberUids)
+        && data.ownerId in data.memberUids
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidFamilyMember(data, homeId, memberId) {
+      return data.keys().hasAll([
+          'memberId',
+          'homeId',
+          'homeOwnerId',
+          'uid',
+          'displayName',
+          'email',
+          'role',
+          'status',
+          'canControlDevices',
+          'canRunAutomations',
+          'canUseVoiceCommands',
+          'canUnlockDoor',
+          'canManageFamily',
+          'inviteCode',
+          'addedByUid',
+          'viewerUids',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'memberId',
+          'homeId',
+          'homeOwnerId',
+          'uid',
+          'displayName',
+          'email',
+          'role',
+          'status',
+          'canControlDevices',
+          'canRunAutomations',
+          'canUseVoiceCommands',
+          'canUnlockDoor',
+          'canManageFamily',
+          'inviteCode',
+          'addedByUid',
+          'viewerUids',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.memberId is string
+        && data.memberId == memberId
+        && isValidId(data.memberId)
+        && data.homeId is string
+        && data.homeId == homeId
+        && isValidId(data.homeId)
+        && data.homeOwnerId is string
+        && isValidId(data.homeOwnerId)
+        && data.uid is string
+        && data.uid.size() <= 128
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.role is string
+        && data.role.size() <= 20
+        && data.role in ['owner', 'adult', 'guest']
+        && data.status is string
+        && data.status.size() <= 20
+        && data.status in ['active', 'invited']
+        && data.canControlDevices is bool
+        && data.canRunAutomations is bool
+        && data.canUseVoiceCommands is bool
+        && data.canUnlockDoor is bool
+        && data.canManageFamily is bool
+        && data.inviteCode is string
+        && data.inviteCode.size() <= 32
+        && data.addedByUid is string
+        && isValidId(data.addedByUid)
+        && isBoundedUidList(data.viewerUids)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidFamilyInvite(data, inviteCode) {
+      return data.keys().hasAll([
+          'inviteCode',
+          'homeId',
+          'homeName',
+          'homeOwnerId',
+          'invitedEmail',
+          'displayName',
+          'role',
+          'canControlDevices',
+          'canRunAutomations',
+          'canUseVoiceCommands',
+          'canUnlockDoor',
+          'canManageFamily',
+          'status',
+          'invitedByUid',
+          'invitedByName',
+          'acceptedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'inviteCode',
+          'homeId',
+          'homeName',
+          'homeOwnerId',
+          'invitedEmail',
+          'displayName',
+          'role',
+          'canControlDevices',
+          'canRunAutomations',
+          'canUseVoiceCommands',
+          'canUnlockDoor',
+          'canManageFamily',
+          'status',
+          'invitedByUid',
+          'invitedByName',
+          'acceptedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.inviteCode is string
+        && data.inviteCode == inviteCode
+        && data.inviteCode.size() >= 6
+        && data.inviteCode.size() <= 32
+        && data.homeId is string
+        && isValidId(data.homeId)
+        && data.homeName is string
+        && data.homeName.size() >= 1
+        && data.homeName.size() <= 80
+        && data.homeOwnerId is string
+        && isValidId(data.homeOwnerId)
+        && data.invitedEmail is string
+        && data.invitedEmail.size() >= 3
+        && data.invitedEmail.size() <= 254
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.role is string
+        && data.role.size() <= 20
+        && data.role in ['adult', 'guest']
+        && data.canControlDevices is bool
+        && data.canRunAutomations is bool
+        && data.canUseVoiceCommands is bool
+        && data.canUnlockDoor is bool
+        && data.canManageFamily is bool
+        && data.status is string
+        && data.status.size() <= 20
+        && data.status in ['pending', 'accepted', 'revoked']
+        && data.invitedByUid is string
+        && isValidId(data.invitedByUid)
+        && data.invitedByName is string
+        && data.invitedByName.size() >= 1
+        && data.invitedByName.size() <= 100
+        && data.acceptedByUid is string
+        && data.acceptedByUid.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidFamilyActivity(data, homeId) {
+      return data.keys().hasAll([
+          'logId',
+          'homeId',
+          'actorUid',
+          'actorName',
+          'actorEmail',
+          'actorRole',
+          'actionTitle',
+          'detail',
+          'category',
+          'source',
+          'viewerUids',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'logId',
+          'homeId',
+          'actorUid',
+          'actorName',
+          'actorEmail',
+          'actorRole',
+          'actionTitle',
+          'detail',
+          'category',
+          'source',
+          'viewerUids',
+          'createdAt'
+        ])
+        && data.logId is string
+        && isValidId(data.logId)
+        && data.homeId is string
+        && data.homeId == homeId
+        && isValidId(data.homeId)
+        && data.actorUid is string
+        && isValidId(data.actorUid)
+        && data.actorName is string
+        && data.actorName.size() >= 1
+        && data.actorName.size() <= 100
+        && data.actorEmail is string
+        && data.actorEmail.size() >= 3
+        && data.actorEmail.size() <= 254
+        && data.actorRole is string
+        && data.actorRole.size() <= 20
+        && data.actorRole in ['owner', 'adult', 'guest']
+        && data.actionTitle is string
+        && data.actionTitle.size() >= 1
+        && data.actionTitle.size() <= 160
+        && data.detail is string
+        && data.detail.size() <= 320
+        && data.category is string
+        && data.category.size() <= 20
+        && data.category in ['device', 'door', 'automation', 'voice', 'family', 'security']
+        && data.source is string
+        && data.source.size() <= 20
+        && data.source in ['dashboard', 'devices', 'automations', 'voice', 'family']
+        && isBoundedUidList(data.viewerUids)
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']);
+      allow delete: if false;
+
+      match /membership/{membershipId} {
+        allow get: if isValidId(userId)
+          && isValidId(membershipId)
+          && membershipId == 'current'
+          && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && isValidId(membershipId)
+          && membershipId == 'current'
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidUserHouseholdLink(incoming(), userId)
+          && existsAfter(/databases/$(database)/documents/homes/$(incoming().homeId));
+        allow update: if isValidId(userId)
+          && isValidId(membershipId)
+          && membershipId == 'current'
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidUserHouseholdLink(incoming(), userId)
+          && incoming().uid == existing().uid
+          && existsAfter(/databases/$(database)/documents/homes/$(incoming().homeId))
+          && incoming().diff(existing()).affectedKeys().hasOnly(['homeId', 'role', 'updatedAt']);
+        allow delete: if isValidId(userId)
+          && isValidId(membershipId)
+          && membershipId == 'current'
+          && isVerifiedUser()
+          && isOwner(userId);
+      }
+
+      match /homeState/{stateId} {
+        allow get: if isValidId(userId)
+          && isValidId(stateId)
+          && stateId == 'default'
+          && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && isValidId(stateId)
+          && stateId == 'default'
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidHomeState(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId)
+          && isValidId(stateId)
+          && stateId == 'default'
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidHomeState(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'selectedMode',
+            'lightOn',
+            'fanOn',
+            'fanSpeed',
+            'doorLocked',
+            'doorOpen',
+            'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      match /activities/{activityId} {
+        allow get: if isValidId(userId)
+          && isValidId(activityId)
+          && isOwner(userId);
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(activityId)
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidActivity(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if false;
+        allow delete: if isValidId(userId)
+          && isValidId(activityId)
+          && isVerifiedUser()
+          && isOwner(userId);
+      }
+
+      match /routines/{routineId} {
+        allow get: if isValidId(userId)
+          && isValidId(routineId)
+          && routineId in ['sleep', 'morning', 'away']
+          && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && isValidId(routineId)
+          && routineId in ['sleep', 'morning', 'away']
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidAutomationRoutine(incoming(), userId, routineId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId)
+          && isValidId(routineId)
+          && routineId in ['sleep', 'morning', 'away']
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidAutomationRoutine(incoming(), userId, routineId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().routineId == existing().routineId
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'lightAction',
+            'fanAction',
+            'fanSpeed',
+            'doorAction',
+            'requireSafetyConfirmation',
+            'updatedAt'
+          ]);
+        allow delete: if isValidId(userId)
+          && isValidId(routineId)
+          && routineId in ['sleep', 'morning', 'away']
+          && isVerifiedUser()
+          && isOwner(userId);
+      }
+    }
+
+    match /homes/{homeId} {
+      allow get: if isValidId(homeId)
+        && isSignedIn()
+        && (
+          resource == null
+            ? homeId == 'home_' + request.auth.uid
+            : (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberUids)
+        );
+      allow list: if false;
+      allow create: if isValidId(homeId)
+        && isVerifiedUser()
+        && isValidHousehold(incoming(), homeId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid));
+      allow update: if isValidId(homeId)
+        && isVerifiedUser()
+        && isValidHousehold(incoming(), homeId)
+        && incoming().homeId == existing().homeId
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && (
+          (isHomeAdmin(homeId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'memberUids', 'updatedAt']))
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            && incoming().memberUids.hasAll(existing().memberUids)
+            && incoming().memberUids.size() == existing().memberUids.size() + 1
+            && request.auth.uid in incoming().memberUids
+            && getAfter(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid)).data.status == 'active'
+          )
+        );
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow get: if isValidId(homeId)
+          && isValidId(memberId)
+          && (isHomeMember(homeId) || isHomeOwner(homeId));
+        allow list: if isSignedIn()
+          && (resource.data.homeOwnerId == request.auth.uid || request.auth.uid in resource.data.viewerUids);
+        allow create: if isValidId(homeId)
+          && isValidId(memberId)
+          && isVerifiedUser()
+          && isValidFamilyMember(incoming(), homeId, memberId)
+          && incoming().createdAt == request.time
+          && (
+            (
+              memberId == request.auth.uid
+              && incoming().uid == request.auth.uid
+              && incoming().homeOwnerId == request.auth.uid
+              && incoming().addedByUid == request.auth.uid
+              && incoming().role == 'owner'
+              && incoming().status == 'active'
+              && incoming().canControlDevices == true
+              && incoming().canRunAutomations == true
+              && incoming().canUseVoiceCommands == true
+              && incoming().canUnlockDoor == true
+              && incoming().canManageFamily == true
+              && existsAfter(/databases/$(database)/documents/homes/$(homeId))
+            )
+            || (
+              isHomeAdmin(homeId)
+              && incoming().homeOwnerId == get(/databases/$(database)/documents/homes/$(homeId)).data.ownerId
+              && incoming().addedByUid == request.auth.uid
+              && incoming().role != 'owner'
+            )
+            || (
+              memberId == request.auth.uid
+              && incoming().uid == request.auth.uid
+              && incoming().status == 'active'
+              && incoming().role != 'owner'
+              && isValidId(incoming().inviteCode)
+              && exists(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode))
+              && get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.homeId == homeId
+              && get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.status == 'pending'
+              && get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.invitedEmail == request.auth.token.email
+              && incoming().homeOwnerId == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.homeOwnerId
+              && incoming().role == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.role
+              && incoming().canControlDevices == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.canControlDevices
+              && incoming().canRunAutomations == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.canRunAutomations
+              && incoming().canUseVoiceCommands == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.canUseVoiceCommands
+              && incoming().canUnlockDoor == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.canUnlockDoor
+              && incoming().canManageFamily == get(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.canManageFamily
+              && getAfter(/databases/$(database)/documents/homeInvites/$(incoming().inviteCode)).data.status == 'accepted'
+            )
+          );
+        allow update: if isValidId(homeId)
+          && isValidId(memberId)
+          && isVerifiedUser()
+          && isValidFamilyMember(incoming(), homeId, memberId)
+          && incoming().memberId == existing().memberId
+          && incoming().homeId == existing().homeId
+          && incoming().homeOwnerId == existing().homeOwnerId
+          && incoming().uid == existing().uid
+          && incoming().email == existing().email
+          && incoming().inviteCode == existing().inviteCode
+          && incoming().addedByUid == existing().addedByUid
+          && incoming().createdAt == existing().createdAt
+          && (
+            (
+              isHomeAdmin(homeId)
+              && existing().uid != existing().homeOwnerId
+              && incoming().role != 'owner'
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'displayName',
+                'role',
+                'status',
+                'canControlDevices',
+                'canRunAutomations',
+                'canUseVoiceCommands',
+                'canUnlockDoor',
+                'canManageFamily',
+                'viewerUids',
+                'updatedAt'
+              ])
+            )
+            || (
+              isHomeAdmin(homeId)
+              && incoming().role == existing().role
+              && incoming().diff(existing()).affectedKeys().hasOnly(['viewerUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(homeId)
+          && isValidId(memberId)
+          && isVerifiedUser()
+          && isHomeAdmin(homeId)
+          && existing().uid != existing().homeOwnerId;
+      }
+
+      match /activityLogs/{logId} {
+        allow get: if isValidId(homeId)
+          && isValidId(logId)
+          && (isHomeMember(homeId) || isHomeOwner(homeId));
+        allow list: if isSignedIn() && request.auth.uid in resource.data.viewerUids;
+        allow create: if isValidId(homeId)
+          && isValidId(logId)
+          && isVerifiedUser()
+          && isValidFamilyActivity(incoming(), homeId)
+          && (isHomeMember(homeId) || isHomeOwner(homeId))
+          && incoming().actorUid == request.auth.uid
+          && request.auth.uid in incoming().viewerUids
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    match /homeInvites/{inviteCode} {
+      allow get: if isValidId(inviteCode)
+        && isSignedIn()
+        && (
+          resource.data.homeOwnerId == request.auth.uid
+          || (isVerifiedUser() && resource.data.invitedEmail == request.auth.token.email)
+          || isHomeAdmin(resource.data.homeId)
+        );
+      allow list: if isSignedIn()
+        && (
+          resource.data.homeOwnerId == request.auth.uid
+          || (isVerifiedUser() && resource.data.invitedEmail == request.auth.token.email)
+        );
+      allow create: if isValidId(inviteCode)
+        && isVerifiedUser()
+        && isValidFamilyInvite(incoming(), inviteCode)
+        && isHomeAdmin(incoming().homeId)
+        && incoming().homeOwnerId == get(/databases/$(database)/documents/homes/$(incoming().homeId)).data.ownerId
+        && incoming().invitedByUid == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().acceptedByUid == ''
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(inviteCode)
+        && isVerifiedUser()
+        && isValidFamilyInvite(incoming(), inviteCode)
+        && incoming().inviteCode == existing().inviteCode
+        && incoming().homeId == existing().homeId
+        && incoming().homeName == existing().homeName
+        && incoming().homeOwnerId == existing().homeOwnerId
+        && incoming().invitedEmail == existing().invitedEmail
+        && incoming().displayName == existing().displayName
+        && incoming().role == existing().role
+        && incoming().canControlDevices == existing().canControlDevices
+        && incoming().canRunAutomations == existing().canRunAutomations
+        && incoming().canUseVoiceCommands == existing().canUseVoiceCommands
+        && incoming().canUnlockDoor == existing().canUnlockDoor
+        && incoming().canManageFamily == existing().canManageFamily
+        && incoming().invitedByUid == existing().invitedByUid
+        && incoming().invitedByName == existing().invitedByName
+        && incoming().createdAt == existing().createdAt
+        && (
+          (
+            existing().status == 'pending'
+            && incoming().status == 'revoked'
+            && isHomeAdmin(existing().homeId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          || (
+            existing().status == 'pending'
+            && incoming().status == 'accepted'
+            && existing().invitedEmail == request.auth.token.email
+            && incoming().acceptedByUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'acceptedByUid', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(inviteCode)
+        && isVerifiedUser()
+        && isHomeAdmin(existing().homeId);
+    }
+  }
+}

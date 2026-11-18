@@ -1,11 +1,22 @@
-<div align="center">
+# AI Home Brain
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+AI Home Brain is a Flutter smart-home app supporting both Web and mobile with Firebase Authentication, simulated room and appliance controls, and a Gemini-powered voice assistant.
 
-  <h1>Built with AI Studio</h2>
+## Authentication
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+- **Web & Mobile Firebase Setup**: Connected to the provisioned Firebase project (`shining-talent-pq7xb`) via `firebase-applet-config.json` and `FirebaseConfig` in `lib/app/firebase_config.dart`.
+- **Google Sign-In**: Supports 1-click **Continue with Google** via `signInWithPopup` on Web (`signInWithProvider` on mobile).
+- **Email & Password**: Supports sign-in, registration, password reset, and profile sign-out (enable **Email/Password** in Firebase Console → Authentication → Sign-in method if using email accounts).
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Features
 
-</div>
+- **Home Dashboard**: Time-aware greeting, dark/light theme toggle, slide-out drawer, My Scenes (`Home`, `Away`, `Sleep`, `Morning`), and Favorite Devices.
+- **Simulated Devices**: Living room Light, Bedroom Fan (with 1–5 speed slider in Bedroom Detail), and Front Door lock/sensor (with explicit confirmation before unlocking).
+- **Voice Assistant**: Speech recognition (`speech_to_text`) and Gemini natural-language command classification (`firebase_ai`). Voice commands never unlock the door.
+
+## Running Locally
+
+```sh
+flutter pub get
+flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0
+```

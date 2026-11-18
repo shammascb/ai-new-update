@@ -1,0 +1,647 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated smart home member profile stored strictly under the owner's UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the home member.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the home member (private PII).",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": ["uid", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "UserHouseholdLink": {
+      "title": "UserHouseholdLink",
+      "description": "Pointer stored under a user's private subcollection linking their UID to their active household.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeId": {
+          "type": "string",
+          "description": "Household document ID the user belongs to.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "adult", "guest"],
+          "description": "Role of the user in the linked household.",
+          "maxLength": 20
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the household link was updated."
+        }
+      },
+      "required": ["uid", "homeId", "role", "updatedAt"]
+    },
+    "HomeState": {
+      "title": "HomeState",
+      "description": "Simulated smart home appliance and automation mode state for a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the state owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "selectedMode": {
+          "type": "string",
+          "enum": ["Home", "Away", "Sleep", "Morning"],
+          "description": "Active automation scene mode.",
+          "maxLength": 20
+        },
+        "lightOn": {
+          "type": "boolean",
+          "description": "Simulated living room light power state."
+        },
+        "fanOn": {
+          "type": "boolean",
+          "description": "Simulated bedroom fan power state."
+        },
+        "fanSpeed": {
+          "type": "integer",
+          "description": "Simulated bedroom fan speed (1 to 5)."
+        },
+        "doorLocked": {
+          "type": "boolean",
+          "description": "Simulated front door lock state."
+        },
+        "doorOpen": {
+          "type": "boolean",
+          "description": "Simulated front door open/closed sensor state."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the device state was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "selectedMode",
+        "lightOn",
+        "fanOn",
+        "fanSpeed",
+        "doorLocked",
+        "doorOpen",
+        "updatedAt"
+      ]
+    },
+    "ActivityEntry": {
+      "title": "ActivityEntry",
+      "description": "Simulated home activity log entry owned by the authenticated user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the activity owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable activity description.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "icon": {
+          "type": "string",
+          "enum": ["light", "fan", "door", "mode", "voice"],
+          "description": "Icon category for the activity item.",
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the activity occurred."
+        }
+      },
+      "required": ["ownerId", "title", "icon", "createdAt"]
+    },
+    "AutomationRoutine": {
+      "title": "AutomationRoutine",
+      "description": "User-customizable smart home automation routine configuration (Sleep, Morning, Away).",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the routine owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "routineId": {
+          "type": "string",
+          "enum": ["sleep", "morning", "away"],
+          "description": "Identifier of the automation routine.",
+          "maxLength": 20
+        },
+        "lightAction": {
+          "type": "string",
+          "enum": ["turn_on", "turn_off", "unchanged"],
+          "description": "Configured action for the living room light.",
+          "maxLength": 20
+        },
+        "fanAction": {
+          "type": "string",
+          "enum": ["turn_on", "turn_off", "unchanged"],
+          "description": "Configured action for the bedroom fan.",
+          "maxLength": 20
+        },
+        "fanSpeed": {
+          "type": "integer",
+          "description": "Target fan speed (1 to 5) when fanAction is turn_on."
+        },
+        "doorAction": {
+          "type": "string",
+          "enum": ["lock_with_safety_check", "keep_locked", "unchanged"],
+          "description": "Configured safety-checked action for the front door.",
+          "maxLength": 32
+        },
+        "requireSafetyConfirmation": {
+          "type": "boolean",
+          "description": "Whether locking an unlocked closed door requires explicit confirmation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the routine configuration was saved."
+        }
+      },
+      "required": [
+        "ownerId",
+        "routineId",
+        "lightAction",
+        "fanAction",
+        "fanSpeed",
+        "doorAction",
+        "requireSafetyConfirmation",
+        "updatedAt"
+      ]
+    },
+    "Household": {
+      "title": "Household",
+      "description": "Shared smart home household root document containing bounded active member UIDs.",
+      "type": "object",
+      "properties": {
+        "homeId": {
+          "type": "string",
+          "description": "Household document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the household.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the primary household owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Bounded list (max 20) of active member UIDs in the household."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the household was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the household was last updated."
+        }
+      },
+      "required": ["homeId", "name", "ownerId", "memberUids", "createdAt", "updatedAt"]
+    },
+    "FamilyMember": {
+      "title": "FamilyMember",
+      "description": "Authorized household member record with role and granular permissions.",
+      "type": "object",
+      "properties": {
+        "memberId": {
+          "type": "string",
+          "description": "Document ID of the member (UID for active signed-in users).",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeId": {
+          "type": "string",
+          "description": "Household document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeOwnerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the household owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID when linked, or empty string while pending sign-in.",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Member display name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Lowercase email address of the authorized member.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "adult", "guest"],
+          "description": "Assigned household role preset.",
+          "maxLength": 20
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "invited"],
+          "description": "Whether the member has an active linked account or is awaiting sign-in.",
+          "maxLength": 20
+        },
+        "canControlDevices": {
+          "type": "boolean",
+          "description": "Permission to toggle lights and fan controls."
+        },
+        "canRunAutomations": {
+          "type": "boolean",
+          "description": "Permission to run automation scenes and routines."
+        },
+        "canUseVoiceCommands": {
+          "type": "boolean",
+          "description": "Permission to issue voice assistant commands from their own account."
+        },
+        "canUnlockDoor": {
+          "type": "boolean",
+          "description": "Permission to unlock the front door via device/UI confirmation."
+        },
+        "canManageFamily": {
+          "type": "boolean",
+          "description": "Permission to invite, add, remove, and update member permissions."
+        },
+        "inviteCode": {
+          "type": "string",
+          "description": "Optional invite code used when accepting an invitation.",
+          "maxLength": 32
+        },
+        "addedByUid": {
+          "type": "string",
+          "description": "UID of the admin/owner who added this member.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "viewerUids": {
+          "type": "array",
+          "description": "Bounded list (max 20) of active household UIDs allowed to query members."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the member record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the member record was last updated."
+        }
+      },
+      "required": [
+        "memberId",
+        "homeId",
+        "homeOwnerId",
+        "uid",
+        "displayName",
+        "email",
+        "role",
+        "status",
+        "canControlDevices",
+        "canRunAutomations",
+        "canUseVoiceCommands",
+        "canUnlockDoor",
+        "canManageFamily",
+        "inviteCode",
+        "addedByUid",
+        "viewerUids",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FamilyInvite": {
+      "title": "FamilyInvite",
+      "description": "Email-bound household invitation with assigned role and permissions.",
+      "type": "object",
+      "properties": {
+        "inviteCode": {
+          "type": "string",
+          "description": "Unique invitation code.",
+          "minLength": 6,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeId": {
+          "type": "string",
+          "description": "Target household document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeName": {
+          "type": "string",
+          "description": "Display name of the target household.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "homeOwnerId": {
+          "type": "string",
+          "description": "UID of the household owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "invitedEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Lowercase email address of the invited family member.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Invited member display name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["adult", "guest"],
+          "description": "Assigned role on acceptance.",
+          "maxLength": 20
+        },
+        "canControlDevices": {
+          "type": "boolean",
+          "description": "Permission to control devices."
+        },
+        "canRunAutomations": {
+          "type": "boolean",
+          "description": "Permission to run routines."
+        },
+        "canUseVoiceCommands": {
+          "type": "boolean",
+          "description": "Permission to issue voice commands."
+        },
+        "canUnlockDoor": {
+          "type": "boolean",
+          "description": "Permission to unlock the front door via device confirmation."
+        },
+        "canManageFamily": {
+          "type": "boolean",
+          "description": "Permission to manage family members."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "revoked"],
+          "description": "Invitation lifecycle status.",
+          "maxLength": 20
+        },
+        "invitedByUid": {
+          "type": "string",
+          "description": "UID of the admin/owner who created the invite.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "invitedByName": {
+          "type": "string",
+          "description": "Display name of the inviter.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "acceptedByUid": {
+          "type": "string",
+          "description": "UID of the verified user who accepted the invite.",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the invite was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the invite was updated."
+        }
+      },
+      "required": [
+        "inviteCode",
+        "homeId",
+        "homeName",
+        "homeOwnerId",
+        "invitedEmail",
+        "displayName",
+        "role",
+        "canControlDevices",
+        "canRunAutomations",
+        "canUseVoiceCommands",
+        "canUnlockDoor",
+        "canManageFamily",
+        "status",
+        "invitedByUid",
+        "invitedByName",
+        "acceptedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FamilyActivityEntry": {
+      "title": "FamilyActivityEntry",
+      "description": "Immutable household user activity log entry attributed to an authenticated user.",
+      "type": "object",
+      "properties": {
+        "logId": {
+          "type": "string",
+          "description": "Document ID of the activity entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "homeId": {
+          "type": "string",
+          "description": "Household document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorUid": {
+          "type": "string",
+          "description": "Authenticated Firebase UID of the user who performed the action.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorName": {
+          "type": "string",
+          "description": "Display name of the acting member.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "actorEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Email of the acting member.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "actorRole": {
+          "type": "string",
+          "enum": ["owner", "adult", "guest"],
+          "description": "Role of the acting member at the time of the action.",
+          "maxLength": 20
+        },
+        "actionTitle": {
+          "type": "string",
+          "description": "Short summary of the action performed.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "detail": {
+          "type": "string",
+          "description": "Optional additional detail or voice transcript.",
+          "maxLength": 320
+        },
+        "category": {
+          "type": "string",
+          "enum": ["device", "door", "automation", "voice", "family", "security"],
+          "description": "Category of the recorded activity.",
+          "maxLength": 20
+        },
+        "source": {
+          "type": "string",
+          "enum": ["dashboard", "devices", "automations", "voice", "family"],
+          "description": "App surface where the action originated.",
+          "maxLength": 20
+        },
+        "viewerUids": {
+          "type": "array",
+          "description": "Bounded list (max 20) of household UIDs permitted to view this log entry."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the activity occurred."
+        }
+      },
+      "required": [
+        "logId",
+        "homeId",
+        "actorUid",
+        "actorName",
+        "actorEmail",
+        "actorRole",
+        "actionTitle",
+        "detail",
+        "category",
+        "source",
+        "viewerUids",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile document keyed by Firebase Auth UID."
+    },
+    "/users/{userId}/membership/{membershipId}": {
+      "schema": { "$ref": "#/entities/UserHouseholdLink" },
+      "description": "Private household membership link for a user (doc id 'current')."
+    },
+    "/users/{userId}/homeState/{stateId}": {
+      "schema": { "$ref": "#/entities/HomeState" },
+      "description": "Per-user simulated smart home state document (doc id 'default')."
+    },
+    "/users/{userId}/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/ActivityEntry" },
+      "description": "Per-user simulated smart home recent activity log."
+    },
+    "/users/{userId}/routines/{routineId}": {
+      "schema": { "$ref": "#/entities/AutomationRoutine" },
+      "description": "Per-user customized automation routine configurations (sleep, morning, away)."
+    },
+    "/homes/{homeId}": {
+      "schema": { "$ref": "#/entities/Household" },
+      "description": "Shared household root document."
+    },
+    "/homes/{homeId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/FamilyMember" },
+      "description": "Authorized family members and permissions within a household."
+    },
+    "/homes/{homeId}/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/FamilyActivityEntry" },
+      "description": "Immutable household user activity audit trail."
+    },
+    "/homeInvites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/FamilyInvite" },
+      "description": "Email-bound family member invitations keyed by invite code."
+    }
+  }
+}
